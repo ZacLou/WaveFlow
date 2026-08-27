@@ -2,7 +2,7 @@
 use crate::errors::ContractError;
 use crate::events::{
     ContributorRegisteredEvent, FundedEvent, MergeRecordedEvent, ProgramCreatedEvent,
-    ProgramPausedEvent, ProgramResumedEvent,
+    ProgramPausedEvent, ProgramResumedEvent, RatioUpdatedEvent,
 };
 use crate::storage::{
     is_pr_processed, mark_pr_processed, next_program_id, read_admin, read_contributor,
@@ -263,6 +263,15 @@ impl WaveFlowEscrow {
         }
         program.reward_per_point = reward_per_point;
         write_program(&env, program_id, &program);
+
+        env.events().publish(
+            (symbol_short!("ratio_upd"),),
+            RatioUpdatedEvent {
+                program_id,
+                reward_per_point,
+            },
+        );
+
         Ok(())
     }
 
