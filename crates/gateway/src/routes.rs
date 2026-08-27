@@ -13,9 +13,10 @@ use tracing::{error, info, warn};
 use waveflow_shared::{GitHubPullRequestEvent, WaveFlowError, WaveFlowResult};
 
 use crate::attestation::{
-    build_attestation, claim_delivery_id, delivery_id_seen, fetch_payout_id, increment_milestone_spent,
-    load_program_status, load_reward_per_point, persist_payout, persist_webhook_event,
-    payout_exists, resolve_contributor_address, resolve_program_id, submit_attestation,
+    build_attestation, check_escrow_balance_alert, claim_delivery_id, delivery_id_seen,
+    fetch_payout_id, increment_milestone_spent, load_program_status, load_reward_per_point,
+    persist_payout, persist_webhook_event, payout_exists, resolve_contributor_address,
+    resolve_program_id, submit_attestation,
 };
 use crate::state::AppState;
 use crate::webhook::{parse_merge_event, verify_github_signature};
@@ -281,6 +282,13 @@ async fn process_merge(
     .await?;
 
     increment_milestone_spent(&state.db, program_uuid, amount).await?;
+
+    check_escrow_balance_alert(
+        &state.db,
+        program_uuid,
+        state.config.escrow_low_balance_threshold,
+    )
+    .await?;
 
     persist_webhook_event(
         &state.db,
