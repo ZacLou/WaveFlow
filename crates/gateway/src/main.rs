@@ -16,7 +16,10 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let config = waveflow_shared::AppConfig::from_env()?;
-    startup::validate_gateway_config(&config)?;
+    startup::    validate_gateway_config(&config)?;
+
+    check_soroban_rpc_health(&config).await?;
+
     let db = sqlx::PgPool::connect(&config.database_url).await?;
     sqlx::migrate!("../../migrations").run(&db).await?;
 
