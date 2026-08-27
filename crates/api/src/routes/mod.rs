@@ -2,12 +2,14 @@
 pub mod admin;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
     Json, Router,
 };
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use metrics::counter;
 use serde_json::json;
 use uuid::Uuid;
@@ -68,21 +70,49 @@ async fn ready(State(state): State<AppState>) -> impl IntoResponse {
     )
 }
 
-async fn list_programs(State(state): State<AppState>) -> Result<Json<Vec<ProgramRecord>>, ApiError> {
-    let rows = sqlx::query_as::<_, ProgramRow>(
-        r#"
-        SELECT id, on_chain_program_id, github_repo, maintainer_address,
-               reward_per_point, escrow_balance, milestone_cap, milestone_spent,
-               status, created_at
-        FROM programs
-        ORDER BY created_at DESC
-        "#,
-    )
-    .fetch_all(&state.db)
-    .await
+async fn list_programs(
+    State(state): State<AppState>,
+    Query(params): Query<PaginationParams>,
+) -> Result<Json<ListResponse<ProgramRecord>>, ApiError> {
+    let limit = params.limit.unwrap_or(20).min(100);
+    let rows = if let Some(cursor) = params.cursor {
+        sqlx::query_as::<_, ProgramRow>(
+            r#"
+            SELECT id, on_chain_program_id, github_repo, maintainer_address,
+                   reward_per_point, escrow_balance, milestone_cap, milestone_spent,
+                   status, created_at
+            FROM programs
+            WHERE created_at < $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            "#,
+        )
+        .bind(cursor)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, ProgramRow>(
+            r#"
+            SELECT id, on_chain_program_id, github_repo, maintainer_address,
+                   reward_per_point, escrow_balance, milestone_cap, milestone_spent,
+                   status, created_at
+            FROM programs
+            ORDER BY created_at DESC
+            LIMIT $1
+            "#,
+        )
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    }
     .map_err(|e| WaveFlowError::Database(e.to_string()))?;
 
-    Ok(Json(rows.into_iter().map(ProgramRow::into_record).collect()))
+    let has_more = rows.len() as i64 == limit;
+    let next_cursor = rows.last().map(|r: &ProgramRow| r.created_at);
+    let items: Vec<ProgramRecord> = rows.into_iter().map(ProgramRow::into_record).collect();
+
+    Ok(Json(ListResponse { items, next_cursor, has_more }))
 }
 
 async fn get_program(
@@ -109,22 +139,48 @@ async fn get_program(
 async fn list_payouts(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<Vec<PayoutRecord>>, ApiError> {
-    let rows = sqlx::query_as::<_, PayoutRow>(
-        r#"
-        SELECT id, program_id, pr_number, github_username, stellar_address,
-               points, amount, tx_hash, created_at
-        FROM payouts
-        WHERE program_id = $1
-        ORDER BY created_at DESC
-        "#,
-    )
-    .bind(id)
-    .fetch_all(&state.db)
-    .await
+    Query(params): Query<PaginationParams>,
+) -> Result<Json<ListResponse<PayoutRecord>>, ApiError> {
+    let limit = params.limit.unwrap_or(20).min(100);
+    let rows = if let Some(cursor) = params.cursor {
+        sqlx::query_as::<_, PayoutRow>(
+            r#"
+            SELECT id, program_id, pr_number, github_username, stellar_address,
+                   points, amount, tx_hash, created_at
+            FROM payouts
+            WHERE program_id = $1 AND created_at < $2
+            ORDER BY created_at DESC
+            LIMIT $3
+            "#,
+        )
+        .bind(id)
+        .bind(cursor)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, PayoutRow>(
+            r#"
+            SELECT id, program_id, pr_number, github_username, stellar_address,
+                   points, amount, tx_hash, created_at
+            FROM payouts
+            WHERE program_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            "#,
+        )
+        .bind(id)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    }
     .map_err(|e| WaveFlowError::Database(e.to_string()))?;
 
-    Ok(Json(rows.into_iter().map(PayoutRow::into_record).collect()))
+    let has_more = rows.len() as i64 == limit;
+    let next_cursor = rows.last().map(|r: &PayoutRow| r.created_at);
+    let items: Vec<PayoutRecord> = rows.into_iter().map(PayoutRow::into_record).collect();
+
+    Ok(Json(ListResponse { items, next_cursor, has_more }))
 }
 
 async fn list_contributors(
@@ -255,3 +311,17 @@ impl IntoResponse for ApiError {
         (status, Json(json!({ "error": self.0.to_string() }))).into_response()
     }
 }
+#[derive(Debug, Deserialize)]
+struct PaginationParams {
+    cursor: Option<DateTime<Utc>>,
+    limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+struct ListResponse<T: Serialize> {
+    items: Vec<T>,
+    next_cursor: Option<DateTime<Utc>>,
+    has_more: bool,
+}
+
+
