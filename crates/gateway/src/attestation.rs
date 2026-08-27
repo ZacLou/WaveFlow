@@ -132,6 +132,39 @@ pub async fn load_reward_per_point(
         .ok_or_else(|| WaveFlowError::NotFound(format!("program {program_id} not found")))
 }
 
+
+/// Check escrow balance after a payout and emit low-balance alert when below threshold.
+pub async fn check_escrow_balance_alert(
+    pool: &sqlx::PgPool,
+    program_id: Uuid,
+    threshold: i64,
+) -> WaveFlowResult<()> {
+    if threshold <= 0 {
+        return Ok(()); // alerting disabled
+    }
+    let row: Option<(i64, String)> = sqlx::query_as(
+        "SELECT escrow_balance, github_repo FROM programs WHERE id = $1",
+    )
+    .bind(program_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| WaveFlowError::Database(e.to_string()))?;
+
+    if let Some((balance, repo)) = row {
+        if balance < threshold {
+            metrics::counter!("waveflow_gateway_escrow_low_balance_total").increment(1);
+            tracing::warn!(
+                program_id = %program_id,
+                repo = %repo,
+                balance = balance,
+                threshold = threshold,
+                "escrow balance below alert threshold"
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn build_attestation(on_chain_program_id: u64, merge: &MergeAttestation) -> AttestationRequest {
     AttestationRequest {
         program_id: on_chain_program_id,
