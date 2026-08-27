@@ -48,3 +48,33 @@ jobs:
         env:
           DATABASE_URL: postgres://waveflow:waveflow@localhost:5433/waveflow
         run: cargo test --workspace
+
+
+  docker:
+    needs: rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.api
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Gateway Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.gateway
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
