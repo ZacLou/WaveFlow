@@ -151,3 +151,85 @@ fn insufficient_escrow_rejects_payout() {
     let err = client.try_record_merge(&gateway, &program_id, &username, &1, &1);
     assert!(err.is_err());
 }
+
+#[test]
+fn set_ratio_updates_reward_per_point() {
+    let env = Env::default();
+    let (contract_id, _, maintainer, _, _) = setup(&env);
+    let client = WaveFlowEscrowClient::new(&env, &contract_id);
+
+    let repo = Symbol::new(&env, "org/repo");
+    let program_id = client.create_program(&maintainer, &repo, &10, &None);
+
+    client.set_ratio(&program_id, &maintainer, &50);
+    let program = client.get_program(&program_id);
+    assert_eq!(program.reward_per_point, 50);
+}
+
+#[test]
+fn set_ratio_rejects_zero() {
+    let env = Env::default();
+    let (contract_id, _, maintainer, _, _) = setup(&env);
+    let client = WaveFlowEscrowClient::new(&env, &contract_id);
+
+    let repo = Symbol::new(&env, "org/repo");
+    let program_id = client.create_program(&maintainer, &repo, &10, &None);
+
+    let err = client.try_set_ratio(&program_id, &maintainer, &0);
+    assert!(err.is_err());
+}
+
+#[test]
+fn set_ratio_rejects_negative() {
+    let env = Env::default();
+    let (contract_id, _, maintainer, _, _) = setup(&env);
+    let client = WaveFlowEscrowClient::new(&env, &contract_id);
+
+    let repo = Symbol::new(&env, "org/repo");
+    let program_id = client.create_program(&maintainer, &repo, &10, &None);
+
+    let err = client.try_set_ratio(&program_id, &maintainer, &-1);
+    assert!(err.is_err());
+}
+
+#[test]
+fn set_ratio_rejects_non_maintainer() {
+    let env = Env::default();
+    let (contract_id, _, maintainer, contributor_wallet, _) = setup(&env);
+    let client = WaveFlowEscrowClient::new(&env, &contract_id);
+
+    let repo = Symbol::new(&env, "org/repo");
+    let program_id = client.create_program(&maintainer, &repo, &10, &None);
+
+    let err = client.try_set_ratio(&program_id, &contributor_wallet, &100);
+    assert!(err.is_err());
+}
+
+#[test]
+fn withdraw_remaining_fails_when_active() {
+    let env = Env::default();
+    let (contract_id, _, maintainer, _, _) = setup(&env);
+    let client = WaveFlowEscrowClient::new(&env, &contract_id);
+
+    let repo = Symbol::new(&env, "org/repo");
+    let program_id = client.create_program(&maintainer, &repo, &10, &None);
+    client.fund(&program_id, &maintainer, &500);
+
+    let err = client.try_withdraw_remaining(&program_id, &maintainer);
+    assert!(err.is_err());
+}
+
+#[test]
+fn withdraw_remaining_rejects_non_maintainer() {
+    let env = Env::default();
+    let (contract_id, _, maintainer, contributor_wallet, _) = setup(&env);
+    let client = WaveFlowEscrowClient::new(&env, &contract_id);
+
+    let repo = Symbol::new(&env, "org/repo");
+    let program_id = client.create_program(&maintainer, &repo, &10, &None);
+    client.fund(&program_id, &maintainer, &500);
+    client.pause(&program_id, &maintainer);
+
+    let err = client.try_withdraw_remaining(&program_id, &contributor_wallet);
+    assert!(err.is_err());
+}
