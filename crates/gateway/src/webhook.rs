@@ -27,6 +27,21 @@ pub fn verify_github_signature(secret: &str, body: &[u8], signature_header: &str
 }
 
 /// Returns attestation inputs when the payload is a merged PR on the default branch.
+
+/// Map GitHub PR labels to Wave complexity points.
+/// Labels follow Drips Wave convention: complexity:low=1, complexity:medium=3, complexity:high=5.
+fn label_to_points(labels: &[waveflow_shared::GitHubLabel]) -> u32 {
+    for label in labels {
+        match label.name.as_str() {
+            "complexity:high" => return 5,
+            "complexity:medium" => return 3,
+            "complexity:low" => return 2,
+            _ => continue,
+        }
+    }
+    1 // default points when no recognized complexity label
+}
+
 pub fn parse_merge_event(payload: &GitHubPullRequestEvent) -> WaveFlowResult<MergeAttestation> {
     if payload.action != "closed" {
         return Err(WaveFlowError::Validation("ignored non-closed action".into()));
@@ -42,7 +57,7 @@ pub fn parse_merge_event(payload: &GitHubPullRequestEvent) -> WaveFlowResult<Mer
         github_repo: payload.repository.full_name.clone(),
         github_username: payload.pull_request.user.login.clone(),
         pr_number: payload.number,
-        points: 1,
+        points: label_to_points(&payload.pull_request.labels),
     })
 }
 
