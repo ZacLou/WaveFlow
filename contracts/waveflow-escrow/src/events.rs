@@ -38,6 +38,13 @@ pub struct MergeRecordedEvent {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RatioUpdatedEvent {
+    pub program_id: u64,
+    pub reward_per_point: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProgramPausedEvent {
     pub program_id: u64,
 }
