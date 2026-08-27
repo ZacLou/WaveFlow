@@ -10,10 +10,32 @@ use axum::{
 };
 use metrics::counter;
 use serde_json::json;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 use uuid::Uuid;
 use waveflow_shared::{ContributorRecord, PayoutRecord, ProgramRecord, ProgramStatus, WaveFlowError, WaveFlowResult};
 
 use crate::state::AppState;
+
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        health,
+        ready,
+        list_programs,
+        get_program,
+        list_payouts,
+        list_contributors,
+    ),
+    components(schemas(
+        ProgramRecord,
+        ContributorRecord,
+        PayoutRecord,
+        ProgramStatus,
+    ))
+)]
+pub struct ApiDoc;
 
 pub fn public_router(state: AppState) -> Router {
     Router::new()
@@ -23,6 +45,7 @@ pub fn public_router(state: AppState) -> Router {
         .route("/api/v1/programs/:id", get(get_program))
         .route("/api/v1/programs/:id/payouts", get(list_payouts))
         .route("/api/v1/programs/:id/contributors", get(list_contributors))
+        .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .with_state(state)
 }
 
