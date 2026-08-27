@@ -66,6 +66,13 @@ pub struct GitHubPullRequest {
     pub merged: bool,
     pub user: GitHubUser,
     pub base: GitHubRef,
+    #[serde(default)]
+    pub labels: Vec<GitHubLabel>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GitHubLabel {
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
