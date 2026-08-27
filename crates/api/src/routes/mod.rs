@@ -255,3 +255,99 @@ impl IntoResponse for ApiError {
         (status, Json(json!({ "error": self.0.to_string() }))).into_response()
     }
 }
+async fn list_webhook_events(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Query(params): Query<PaginationParams>,
+) -> Result<Json<ListResponse<WebhookEventRecord>>, ApiError> {
+    let program_exists: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM programs WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| WaveFlowError::Database(e.to_string()))?;
+
+    if program_exists.is_none() {
+        return Err(WaveFlowError::NotFound(format!("program {id} not found")).into());
+    }
+
+    let limit = params.limit.unwrap_or(20).min(100);
+    let rows = if let Some(cursor) = params.cursor {
+        sqlx::query_as::<_, WebhookEventRow>(
+            r#"
+            SELECT id, delivery_id, event_type, github_repo, pr_number, status, error_message, received_at
+            FROM webhook_events
+            WHERE github_repo = (SELECT github_repo FROM programs WHERE id = $1)
+              AND received_at < $2
+            ORDER BY received_at DESC
+            LIMIT $3
+            "#,
+        )
+        .bind(id)
+        .bind(cursor)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    } else {
+        sqlx::query_as::<_, WebhookEventRow>(
+            r#"
+            SELECT id, delivery_id, event_type, github_repo, pr_number, status, error_message, received_at
+            FROM webhook_events
+            WHERE github_repo = (SELECT github_repo FROM programs WHERE id = $1)
+            ORDER BY received_at DESC
+            LIMIT $2
+            "#,
+        )
+        .bind(id)
+        .bind(limit)
+        .fetch_all(&state.db)
+        .await
+    }
+    .map_err(|e| WaveFlowError::Database(e.to_string()))?;
+
+    let has_more = rows.len() as i64 == limit;
+    let next_cursor = rows.last().map(|r: &WebhookEventRow| r.received_at);
+    let items: Vec<WebhookEventRecord> = rows.into_iter().map(WebhookEventRow::into_record).collect();
+
+    Ok(Json(ListResponse { items, next_cursor, has_more }))
+}
+
+#[derive(sqlx::FromRow)]
+struct WebhookEventRow {
+    id: Uuid,
+    delivery_id: Option<String>,
+    event_type: String,
+    github_repo: String,
+    pr_number: Option<i64>,
+    status: String,
+    error_message: Option<String>,
+    received_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl WebhookEventRow {
+    fn into_record(self) -> WebhookEventRecord {
+        WebhookEventRecord {
+            id: self.id,
+            delivery_id: self.delivery_id,
+            event_type: self.event_type,
+            github_repo: self.github_repo,
+            pr_number: self.pr_number.map(|n| n as u64),
+            status: self.status,
+            error_message: self.error_message,
+            received_at: self.received_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WebhookEventRecord {
+    id: Uuid,
+    delivery_id: Option<String>,
+    event_type: String,
+    github_repo: String,
+    pr_number: Option<u64>,
+    status: String,
+    error_message: Option<String>,
+    received_at: chrono::DateTime<chrono::Utc>,
+}
+
+
