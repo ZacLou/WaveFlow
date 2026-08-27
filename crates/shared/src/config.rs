@@ -77,3 +77,10 @@ mod tests {
         std::env::remove_var("API_ADMIN_KEYS");
     }
 }
+    /// Threshold for escrow low-balance alerts (in token minor units / stroops).
+    /// When a program's escrow_balance drops below this value after a payout,
+    /// the gateway logs a warning and increments a Prometheus counter.
+    #[envconfig(from = "ESCROW_LOW_BALANCE_THRESHOLD", default = "0")]
+    pub escrow_low_balance_threshold: i64,
+
+    
