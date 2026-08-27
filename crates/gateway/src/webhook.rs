@@ -86,6 +86,7 @@ mod tests {
                 base: GitHubRef {
                     ref_name: base_ref.into(),
                 },
+                labels: vec![],
             },
             repository: GitHubRepository {
                 full_name: "StellarRoute/WaveFlow".into(),
@@ -137,3 +138,42 @@ mod tests {
         assert!(matches!(err, WaveFlowError::Validation(_)));
     }
 }
+
+
+    #[test]
+    fn parse_merge_event_maps_complexity_labels_to_points() {
+        let mut event = sample_event(true, "main", "main");
+        event.pull_request.labels = vec![
+            waveflow_shared::GitHubLabel { name: "complexity:medium".into() },
+            waveflow_shared::GitHubLabel { name: "bug".into() },
+        ];
+        let attestation = parse_merge_event(&event).expect("merge");
+        assert_eq!(attestation.points, 3);
+    }
+
+    #[test]
+    fn parse_merge_event_defaults_points_to_1_without_label() {
+        let event = sample_event(true, "main", "main");
+        let attestation = parse_merge_event(&event).expect("merge");
+        assert_eq!(attestation.points, 1);
+    }
+
+    #[test]
+    fn parse_merge_event_maps_high_complexity() {
+        let mut event = sample_event(true, "main", "main");
+        event.pull_request.labels = vec![
+            waveflow_shared::GitHubLabel { name: "complexity:high".into() },
+        ];
+        let attestation = parse_merge_event(&event).expect("merge");
+        assert_eq!(attestation.points, 5);
+    }
+
+    #[test]
+    fn parse_merge_event_maps_low_complexity() {
+        let mut event = sample_event(true, "main", "main");
+        event.pull_request.labels = vec![
+            waveflow_shared::GitHubLabel { name: "complexity:low".into() },
+        ];
+        let attestation = parse_merge_event(&event).expect("merge");
+        assert_eq!(attestation.points, 2);
+    }
