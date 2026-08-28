@@ -132,6 +132,62 @@ pub async fn load_reward_per_point(
         .ok_or_else(|| WaveFlowError::NotFound(format!("program {program_id} not found")))
 }
 
+
+/// Query gateway signer XLM balance from Horizon and expose as Prometheus gauge.
+/// Only runs when GATEWAY_PUBLIC_KEY and HORIZON_URL are configured.
+pub async fn update_signer_xlm_gauge(config: &waveflow_shared::AppConfig) -> WaveFlowResult<()> {
+    let public_key = match &config.gateway_public_key {
+        Some(k) if !k.is_empty() => k,
+        _ => return Ok(()), // no signer configured, skip
+    };
+    let horizon_url = if !config.horizon_url.is_empty() {
+        &config.horizon_url
+    } else {
+        return Ok(()); // no Horizon URL, skip
+    };
+
+    let url = format!("{}/accounts/{}", horizon_url.trim_end_matches('/'), public_key);
+    match reqwest::get(&url).await {
+        Ok(resp) if resp.status().is_success() => {
+            let body: serde_json::Value = resp.json().await
+                .map_err(|e| WaveFlowError::Internal(format!("Horizon parse error: {e}")))?;
+            let balances = body["balances"].as_array();
+            if let Some(balances) = balances {
+                for b in balances {
+                    if b["asset_type"].as_str() == Some("native") {
+                        if let Some(balance_str) = b["balance"].as_str() {
+                            if let Ok(balance_f) = balance_str.parse::<f64>() {
+                                metrics::gauge!("waveflow_gateway_signer_xlm_balance")
+                                    .set(balance_f);
+                                tracing::info!(
+                                    signer = %public_key,
+                                    xlm_balance = balance_f,
+                                    "gateway signer XLM balance updated"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(resp) => {
+            tracing::warn!(
+                horizon_status = %resp.status(),
+                signer = %public_key,
+                "Horizon returned non-200 for signer balance query"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                signer = %public_key,
+                "failed to query Horizon for signer XLM balance"
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn build_attestation(on_chain_program_id: u64, merge: &MergeAttestation) -> AttestationRequest {
     AttestationRequest {
         program_id: on_chain_program_id,
