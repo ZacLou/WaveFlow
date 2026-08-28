@@ -77,3 +77,12 @@ mod tests {
         std::env::remove_var("API_ADMIN_KEYS");
     }
 }
+    /// Horizon API URL for querying Stellar account balances.
+    #[envconfig(from = "HORIZON_URL", default = "")]
+    pub horizon_url: String,
+
+    /// Gateway signer public key for XLM balance monitoring.
+    #[envconfig(from = "GATEWAY_PUBLIC_KEY")]
+    pub gateway_public_key: Option<String>,
+
+    
