@@ -1,4 +1,5 @@
 // API key authentication middleware for admin routes.
+// + Request ID middleware for trace propagation across services.
 use axum::{
     body::Body,
     extract::State,
@@ -10,6 +11,31 @@ use axum::{
 use serde_json::json;
 
 use crate::state::AppState;
+
+
+// Request ID middleware: reads X-Request-Id header or generates a UUIDv4,
+// injects it into response headers, and attaches it to the tracing span.
+pub async fn request_id(
+    req: Request<Body>,
+    next: Next,
+) -> Response {
+    let request_id = req
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+    tracing::Span::current().record("request_id", &request_id);
+
+    let mut response = next.run(req).await;
+    response.headers_mut().insert(
+        "x-request-id",
+        request_id.parse().unwrap(),
+    );
+    response
+}
+
 
 pub async fn require_admin_key(
     State(state): State<AppState>,
