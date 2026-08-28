@@ -18,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
     let config = waveflow_shared::AppConfig::from_env()?;
     startup::validate_gateway_config(&config)?;
     let db = sqlx::PgPool::connect(&config.database_url).await?;
-    sqlx::migrate!("../../migrations").run(&db).await?;
+    sqlx::migrate!("../migrations").run(&db).await?;
 
     let metrics_handle = metrics_exporter_prometheus::PrometheusBuilder::new()
         .install_recorder()
