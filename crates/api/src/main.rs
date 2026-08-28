@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
 
     let config = waveflow_shared::AppConfig::from_env()?;
     let db = sqlx::PgPool::connect(&config.database_url).await?;
-    sqlx::migrate!("../../migrations").run(&db).await?;
+    sqlx::migrate!("../migrations").run(&db).await?;
     startup::run_startup_checks(&config, &db).await?;
 
     let metrics_handle = metrics_exporter_prometheus::PrometheusBuilder::new()
