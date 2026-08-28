@@ -20,11 +20,37 @@ use crate::attestation::{
 use crate::state::AppState;
 use crate::webhook::{parse_merge_event, verify_github_signature};
 
+// Request ID middleware for trace propagation across services.
+async fn request_id(req: Request<Body>, next: Next) -> Response {
+    use axum::body::Body;
+    use axum::http::Request;
+    use axum::middleware::Next;
+    use axum::response::Response;
+
+    let request_id = req
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string)
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+    tracing::Span::current().record("request_id", &request_id);
+
+    let mut response = next.run(req).await;
+    response.headers_mut().insert(
+        "x-request-id",
+        request_id.parse().unwrap(),
+    );
+    response
+}
+
+
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
         .route("/webhooks/github", post(github_webhook))
+        .layer(axum::middleware::from_fn(request_id))
         .with_state(state)
 }
 
