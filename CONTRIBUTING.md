@@ -1,6 +1,6 @@
 # Contributing to WaveFlow
 
-WaveFlow automates bounty escrow on Stellar/Soroban with GitHub merge-triggered payouts.
+WaveFlow automates bounty escrow on Stellar/Soroban with GitHub merge-triggered payouts. It is Stellar-native and does not depend on the Drips API (see PRD NG6).
 
 ## Before you start
 
@@ -32,7 +32,13 @@ cargo test --workspace
 
 - Branch from `main`, open PRs against `main`.
 - Run `cargo fmt`, `cargo clippy`, and `cargo test --workspace` before pushing.
-- Use issue prefixes: `[contracts]`, `[backend]`, `[documentation]`, `[infra]`.
+- Use issue prefixes that match the area of change:
+  - `[gateway]` – GitHub webhook ingestion and chain attestation
+  - `[api]` – REST API for programs and payouts
+  - `[contracts]` – Soroban escrow contract
+  - `[backend]` – shared crates, database, or infrastructure
+  - `[documentation]` – docs, README, or CONTRIBUTING updates
+  - `[infra]` – Docker, CI/CD, or deployment configuration
 - Label Drips Wave issues with `Drips Wave` and `complexity:*`.
 
 ## Security

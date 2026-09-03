@@ -50,6 +50,10 @@ Run API:
 cargo run -p waveflow-api
 ```
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for branch conventions, issue label prefixes, and the Wave bounty workflow.
+
 ## Documentation
 
 - [Product Requirements](docs/PRD.md)
